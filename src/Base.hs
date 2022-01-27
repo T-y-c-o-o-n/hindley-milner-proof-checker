@@ -16,28 +16,28 @@ data Expr where
   L :: Var -> Expr -> Expr
   Appl :: Expr -> Expr -> Expr
   Let :: Var -> Expr -> Expr -> Expr
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 data Type where
   ForAll :: Var -> Type -> Type
   Mono :: MonoType -> Type
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 data MonoType where
   (:=>) :: MonoType -> MonoType -> MonoType
   V :: Var -> MonoType
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 data TypedExpr = Expr :. Type
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 type Context = [TypedExpr]
 
 data ProofNode = ProofNode' :# Int
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 data ProofNode' = Context :|- TypedExpr
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 data ProofTree = [ProofTree] `Proof` ProofNode
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)

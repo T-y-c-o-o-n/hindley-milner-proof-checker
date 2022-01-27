@@ -99,19 +99,19 @@ parseExpr :: Parser Expr
 parseExpr =
   choice
     [ try $ do
-        maybeExpr <- optional parseApplication
-        char '\\'
-        x <- parseVariable
-        char '.'
-        e <- parseExpr
-        return $ foldr Appl (L x e) maybeExpr,
-      try $ do
         string "let"
         x <- parseVariable
         char '='
         e0 <- parseExpr
         string "in"
         Let x e0 <$> parseExpr,
+      try $ do
+        maybeExpr <- optional parseApplication
+        char '\\'
+        x <- parseVariable
+        char '.'
+        e <- parseExpr
+        return $ foldr Appl (L x e) maybeExpr,
       parseApplication
     ]
 
@@ -124,21 +124,22 @@ parseApplication =
 parseAtom :: Parser Expr
 parseAtom =
   try
-    ( do
-        char '('
-        expr <- parseExpr
-        char ')'
-        return expr
-    )
+      ( do
+          char '('
+          expr <- parseExpr
+          char ')'
+          return expr
+      )
     <|> (Var <$> parseVariable)
 
 parseVariable :: Parser Var
 parseVariable =
-  do
+  try $ do
     C.space
     c <- C.lowerChar
-    s <- manyTill (C.lowerChar <|> C.digitChar <|> C.char '\'') C.space
-    return $ c : s
+    s <- many (C.lowerChar <|> C.digitChar <|> C.char '\'')
+    let res = c : s
+    if res == "let" || res == "in" then fail "" else return res
 
 parseRule :: Parser Int
 parseRule = do
