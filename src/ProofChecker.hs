@@ -1,9 +1,19 @@
 module ProofChecker where
 
 import Base
+import Data.Set
 
-freeVars :: Context -> [Var]
-freeVars t = []
+freeVars :: Type -> Set Var
+freeVars = freeVars' empty
+  where
+    freeVars' :: Set Var -> Type -> Set Var
+    freeVars' binded (ForAll x t) = freeVars' (x `insert` binded) t
+    freeVars' binded (Mono (V a)) = if a `member` binded then empty else singleton a
+    freeVars' binded (Mono (t0 :=> t1)) = freeVars' binded (Mono t0) `union` freeVars' binded (Mono t1)
+
+freeVarsFromContext :: Context -> Set Var
+freeVarsFromContext ((Var _ :. t) : xs) = freeVars t `union` freeVarsFromContext xs
+freeVarsFromContext _ = empty
 
 checkSubtype :: Type -> Type -> Bool
 checkSubtype sigma' sigma = False
@@ -60,7 +70,7 @@ checkProof ([_ `Proof` hs :|- e :. sigma :# _] `Proof` hs' :|- e' :. ForAll x si
   hs == hs'
     && e == e'
     && sigma == sigma'
-    && x `notElem` freeVars hs
+    && x `notElem` freeVarsFromContext hs
 -- rule 6
 
 checkProof _ = False
