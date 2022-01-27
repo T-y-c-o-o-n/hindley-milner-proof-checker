@@ -19,20 +19,20 @@ freeVarsFromContext _ = empty
 checkSubtype :: Type -> Type -> Bool
 checkSubtype sigma' (ForAll b t) = b `notMember` freeVars sigma' && checkSubtype sigma' t
 checkSubtype sigma' (Mono t) = fst $ checkSubtype' M.empty sigma' t
-
-checkSubtype' :: M.Map Var (Maybe MonoType) -> Type -> MonoType -> (Bool, M.Map Var (Maybe MonoType))
-checkSubtype' substitutions (ForAll a t0) t1 = checkSubtype' (M.insert a Nothing substitutions) t0 t1
-checkSubtype' substitutions (Mono t1@(V a)) t2 =
-  case a `M.lookup` substitutions of
-    Nothing -> (t1 == t2, substitutions)
-    Just Nothing -> (True, M.insert a (Just t2) substitutions)
-    Just (Just t) -> (t == t2, substitutions)
-checkSubtype' substitutions (Mono (t0 :=> t1)) (t0' :=> t1') =
-  let left@(leftRec, substitutions') = checkSubtype' substitutions (Mono t0) t0'
-   in if leftRec
-        then checkSubtype' substitutions' (Mono t1) t1'
-        else left
-checkSubtype' s _ _ = (False, s)
+  where
+    checkSubtype' :: M.Map Var (Maybe MonoType) -> Type -> MonoType -> (Bool, M.Map Var (Maybe MonoType))
+    checkSubtype' substitutions (ForAll a t0) t1 = checkSubtype' (M.insert a Nothing substitutions) t0 t1
+    checkSubtype' substitutions (Mono t1@(V a)) t2 =
+      case a `M.lookup` substitutions of
+        Nothing -> (t1 == t2, substitutions)
+        Just Nothing -> (True, M.insert a (Just t2) substitutions)
+        Just (Just t') -> (t' == t2, substitutions)
+    checkSubtype' substitutions (Mono (t0 :=> t1)) (t0' :=> t1') =
+      let left@(leftRec, substitutions') = checkSubtype' substitutions (Mono t0) t0'
+       in if leftRec
+            then checkSubtype' substitutions' (Mono t1) t1'
+            else left
+    checkSubtype' s _ _ = (False, s)
 
 checkProof :: ProofTree -> Bool
 checkProof ([] `Proof` _ :|- Var _ :. _ :# 1) = True
