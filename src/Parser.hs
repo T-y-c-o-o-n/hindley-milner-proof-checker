@@ -1,132 +1,148 @@
 module Parser where
 
 import Base
-import Control.Monad (void)
+import Control.Monad (replicateM_, void)
 import Data.Void (Void)
 import Text.Megaparsec
-import Text.Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer as L
+import qualified Text.Megaparsec.Char as C
 
 type Parser = Parsec Void String
 
 parse :: String -> Either (ParseErrorBundle String Void) ProofTree
-parse = Text.Megaparsec.parse (parseProof >>= \res -> eof >> return res) ""
+parse = Text.Megaparsec.parse (parseProof <* eof) ""
 
-ws :: Parser ()
-ws =
-  L.space
-    Text.Megaparsec.Char.space1
-    (L.skipLineComment ";;")
-    (L.skipBlockCommentNested "/*" "*/")
+char :: Char -> Parser ()
+char = (C.space *>) . void . C.char
+
+string :: String -> Parser ()
+string = (C.space *>) . void . C.string
 
 parseProof :: Parser ProofTree
-parseProof = do
-  node <- parseString
-  return undefined
+parseProof = parseProof' 0
 
-parseString :: Parser ProofNode
-parseString = do
-  parseIndent
-  parseContext
-  parseTypedExpr
-  parseRule
-  return undefined
+parseProof' :: Int -> Parser ProofTree
+parseProof' indent = do
+  node <- parseLine indent
+  children <- many $ try $ parseProof' $ indent + 1
+  return $ children `Proof` node
 
-parseIndent :: Parser ()
-parseIndent = void $ string "*   "
+parseLine :: Int -> Parser ProofNode
+parseLine indents = do
+  parseIndents indents
+  context <- parseContext
+  string "|-"
+  typedExpr <- parseTypedExpr
+  rule <- parseRule
+  _ <- C.newline
+  return $ context :|- typedExpr :# rule
 
-parseContext :: Parser ()
-parseContext = -- optional $
-  do
-    parseVariable
-    _ <- char ':'
-    parseType
-    -- optional $ do char '.'; parseType
+parseIndents :: Int -> Parser ()
+parseIndents = flip replicateM_ $ C.string "*   "
 
-parseTypedExpr :: Parser ()
+parseContext :: Parser Context
+parseContext =
+  sepBy
+    ( do
+        x <- parseVariable
+        char ':'
+        t <- parseType
+        return $ Var x :. t
+    )
+    (char ',')
+
+parseTypedExpr :: Parser TypedExpr
 parseTypedExpr = do
-  parseExpr
-  _ <- char ':'
-  parseType
+  e <- parseExpr
+  char ':'
+  t <- parseType
+  return $ e :. t
 
-parseType :: Parser ()
+parseType :: Parser Type
 parseType =
   choice
-    [ do
-        _ <- char '('
-        parseType
-        _ <- char ')',
-      parseMonoType,
-      do
-        _ <- string "forall"
-        parseVariable
-        _ <- char '.'
-        parseType
+    [ try $ do
+        char '('
+        t <- parseType
+        char ')'
+        return t,
+      try $ do
+        string "forall"
+        x <- parseVariable
+        char '.'
+        ForAll x <$> parseType,
+      Mono <$> parseMonoType
     ]
 
-parseMonoType :: Parser ()
+parseMonoType :: Parser MonoType
 parseMonoType =
   choice
-    [ parseVariable,
-      do
-        _ <- char '('
-        parseMonoType
-        _ <- char ')'
-        _ <- string "->"
-        parseMonoType,
-      do
-        _ <- char '('
+    [ try $ do
+        char '('
+        t0 <- parseMonoType
+        char ')'
+        string "->"
+        t1 <- parseMonoType
+        return $ t0 :=> t1,
+      try $ do
+        char '('
         t <- parseMonoType
-        _ <- char ')'
+        char ')'
         return t,
-      do
-        parseVariable
-        _ <- string "->"
-        parseMonoType
+      try $ do
+        x <- parseVariable
+        string "->"
+        (V x :=>) <$> parseMonoType,
+      V <$> parseVariable
     ]
 
-parseExpr :: Parser ()
+parseExpr :: Parser Expr
 parseExpr =
   choice
-    [ do
-        --        optional parseApplication  TODO
-        _ <- char '\\'
-        parseVariable
-        _ <- char '.'
-        parseExpr,
-      do
-        _ <- string "let"
-        parseVariable
-        _ <- char '='
-        parseExpr
-        _ <- string "in"
-        parseExpr
+    [ try $ do
+        maybeExpr <- optional parseApplication
+        char '\\'
+        x <- parseVariable
+        char '.'
+        e <- parseExpr
+        return $ foldr Appl (L x e) maybeExpr,
+      try $ do
+        string "let"
+        x <- parseVariable
+        char '='
+        e0 <- parseExpr
+        string "in"
+        Let x e0 <$> parseExpr,
+      parseApplication
     ]
 
-parseApplication :: Parser ()
+parseApplication :: Parser Expr
 parseApplication =
-  parseAtom
-    <|> ( do
-            parseApplication
-            parseAtom
-        )
+  do
+    atoms <- some parseAtom
+    return $ foldl1 Appl atoms
 
-parseAtom :: Parser ()
+parseAtom :: Parser Expr
 parseAtom =
-  ( do
-      _ <- char '('
-      expr <- parseExpr
-      _ <- char ')'
-      return expr
-  )
-    <|> parseVariable
+  try
+    ( do
+        char '('
+        expr <- parseExpr
+        char ')'
+        return expr
+    )
+    <|> (Var <$> parseVariable)
 
-parseVariable :: Parser ()
-parseVariable = void $ string "*   "
+parseVariable :: Parser Var
+parseVariable =
+  do
+    C.space
+    c <- C.lowerChar
+    s <- manyTill (C.lowerChar <|> C.digitChar <|> C.char '\'') C.space
+    return $ c : s
 
 parseRule :: Parser Int
 parseRule = do
-  _ <- string "[rule #"
-  d <- choice $ map (string . show) [1 .. 6]
-  _ <- char ']'
+  string "[rule #"
+  d <- choice $ map (C.string . show) [1 .. 6 :: Integer]
+  char ']'
   return $ read d -- TODO replace with something

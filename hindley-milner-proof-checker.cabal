@@ -28,6 +28,7 @@ library
       Base
       Lib
       Parser
+      ProofChecker
   other-modules:
       Paths_hindley_milner_proof_checker
   hs-source-dirs:
