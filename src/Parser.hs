@@ -1,10 +1,11 @@
 module Parser where
 
 import Base
-import Control.Monad (replicateM_, void)
+import Control.Monad (replicateM_, void, when)
 import Data.Void (Void)
 import Text.Megaparsec
 import qualified Text.Megaparsec.Char as C
+import Text.Megaparsec.Char.Lexer (lexeme, symbol)
 
 type Parser = Parsec Void String
 
@@ -12,10 +13,10 @@ parse :: String -> Either (ParseErrorBundle String Void) ProofTree
 parse = Text.Megaparsec.parse (parseProof <* eof) ""
 
 char :: Char -> Parser ()
-char = (C.space *>) . void . C.char
+char c = void $ symbol C.space [c]
 
 string :: String -> Parser ()
-string = (C.space *>) . void . C.string
+string = void . symbol C.space
 
 parseProof :: Parser ProofTree
 parseProof = parseProof' 0
@@ -33,7 +34,6 @@ parseLine indents = do
   string "|-"
   typedExpr <- parseTypedExpr
   rule <- parseRule
-  _ <- C.newline
   return $ context :|- typedExpr :# rule
 
 parseIndents :: Int -> Parser ()
@@ -41,14 +41,15 @@ parseIndents = flip replicateM_ $ C.string "*   "
 
 parseContext :: Parser Context
 parseContext =
-  sepBy
-    ( do
-        x <- parseVariable
-        char ':'
-        t <- parseType
-        return $ Var x :. t
-    )
-    (char ',')
+  reverse
+    <$> sepBy
+      ( do
+          x <- parseVariable
+          char ':'
+          t <- parseType
+          return $ Var x :. t
+      )
+      (char ',')
 
 parseTypedExpr :: Parser TypedExpr
 parseTypedExpr = do
@@ -60,60 +61,64 @@ parseTypedExpr = do
 parseType :: Parser Type
 parseType =
   choice
-    [ try $ do
+    [ Mono <$> try parseMonoType,
+      do
         char '('
         t <- parseType
         char ')'
         return t,
-      try $ do
+      do
         string "forall"
         x <- parseVariable
         char '.'
-        ForAll x <$> parseType,
-      Mono <$> parseMonoType
+        ForAll x <$> parseType
     ]
 
 parseMonoType :: Parser MonoType
 parseMonoType =
-  choice
-    [ try $ do
-        char '('
-        t0 <- parseMonoType
-        char ')'
-        string "->"
-        t1 <- parseMonoType
-        return $ t0 :=> t1,
-      try $ do
-        char '('
-        t <- parseMonoType
-        char ')'
-        return t,
-      try $ do
-        x <- parseVariable
-        string "->"
-        (V x :=>) <$> parseMonoType,
-      V <$> parseVariable
-    ]
+  do
+    left <-
+      choice
+        [ do
+            char '('
+            t <- parseMonoType
+            char ')'
+            return t,
+          V <$> parseVariable
+        ]
+    foldl (:=>) left
+      <$> optional
+        ( do
+            string "->"
+            parseMonoType
+        )
+
+parseLambda :: Parser Expr
+parseLambda =
+  do
+    char '\\'
+    x <- parseVariable
+    char '.'
+    L x <$> parseExpr
 
 parseExpr :: Parser Expr
 parseExpr =
-  choice
-    [ try $ do
-        string "let"
-        x <- parseVariable
-        char '='
-        e0 <- parseExpr
-        string "in"
-        Let x e0 <$> parseExpr,
-      try $ do
-        maybeExpr <- optional parseApplication
-        char '\\'
-        x <- parseVariable
-        char '.'
-        e <- parseExpr
-        return $ foldr Appl (L x e) maybeExpr,
-      parseApplication
-    ]
+  do
+    applMaybe <- optional parseApplication
+    case applMaybe of
+      Nothing ->
+        choice
+          [ try $ do
+              string "let"
+              x <- parseVariable
+              char '='
+              e0 <- parseExpr
+              string "in"
+              Let x e0 <$> parseExpr,
+            parseLambda
+          ]
+      Just appl -> do
+        foldl Appl appl <$> optional parseLambda
 
 parseApplication :: Parser Expr
 parseApplication =
@@ -123,23 +128,22 @@ parseApplication =
 
 parseAtom :: Parser Expr
 parseAtom =
-  try
-      ( do
-          char '('
-          expr <- parseExpr
-          char ')'
-          return expr
-      )
-    <|> (Var <$> parseVariable)
+  ( do
+      char '('
+      expr <- parseExpr
+      char ')'
+      return expr
+  )
+    <|> (Var <$> try parseVariable)
 
 parseVariable :: Parser Var
 parseVariable =
-  try $ do
-    C.space
+  do
     c <- C.lowerChar
     s <- many (C.lowerChar <|> C.digitChar <|> C.char '\'')
+    C.space
     let res = c : s
-    if res == "let" || res == "in" then fail "" else return res
+    if res == "let" || res == "in" || res == "forall" then fail "" else return res
 
 parseRule :: Parser Int
 parseRule = do

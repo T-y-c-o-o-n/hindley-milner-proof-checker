@@ -8,5 +8,5 @@ main :: IO ()
 main = do
   input <- getContents
   case parse input of
-    Left e -> putStrLn $ errorBundlePretty e
+    Left e -> putStrLn "Incorrect"
     Right proof -> putStrLn $ if checkProof proof then "Correct" else "Incorrect"
