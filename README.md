@@ -1,7 +1,21 @@
 # hindley-milner-proof-checker
 
-Checker for correctness of proof
+Checker for proof correctness
 in [Hindley-Milner type system](https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system).
+
+### Type Grammar
+
+#### Regular types
+
+`α`
+
+#### Monotypes
+
+`τ ::= α | τ → τ`
+
+#### Polytypes
+
+`σ ::= ∀α. σ | τ`
 
 ### Rules
 
