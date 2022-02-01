@@ -29,3 +29,29 @@ in [Hindley-Milner type system](https://en.wikipedia.org/wiki/Hindley%E2%80%93Mi
 | 4    | `Γ ⊢ e : σ` `Γ, x : σ ⊢ f : τ`  | `Γ ⊢ let x = e in f : τ` | `τ` is a monotype, `x` is a variable      | 
 | 5    | `Γ ⊢ e : σ'`                    | `Γ ⊢ e : σ`              | `σ` is subtype of `σ'`                    |
 | 6    | `Γ ⊢ e : σ`                     | `Γ ⊢ e : ∀α. σ`          | `α ∉` free type variables of `Γ`          |
+
+## Input
+
+Several lines, each of them is step of proof with rule annotation at the end. Line has 0 or more indents. Indent is `*` + 3 spaces.
+The children of the line are lines with 1 more indent after her and before line with indent less or equal her.
+The children are expected to be Dependencies from the Rule table in same order.
+
+### Example
+```
+w : t1, y : t' |- let c = \x. \z. x in c w y : t1 [rule #4]
+*   w : t1, y : t' |- \x. \z. x : forall a. t1 -> a -> t1 [rule #6]
+*   *   w : t1, y : t' |- \x. \z. x : t1 -> a -> t1 [rule #3]
+*   *   *   w : t1, y : t', x : t1 |- \z. x : a -> t1 [rule #3]
+*   *   *   *   w : t1, x : t1, y : t', z : a |- x : t1 [rule #1]
+*   w : t1, c : forall a. t1 -> a -> t1, y : t' |- c w y : t1 [rule #2]
+*   *   w : t1, c : forall a. t1 -> a -> t1, y : t' |- c w : t' -> t1 [rule #2]
+*   *   *   w : t1, c : forall a. t1 -> a -> t1, y : t' |- c : t1 -> t' -> t1 [rule #5]
+*   *   *   *   w : t1, c : forall a. t1 -> a -> t1, y : t' |- c : forall b. t1 -> b -> t1 [rule #5]
+*   *   *   *   *   w : t1, c : forall a. t1 -> a -> t1, y : t' |- c : forall a. t1 -> a -> t1 [rule #1]
+*   *   *   w : t1, c : forall a. t1 -> a -> t1, y : t' |- w : t1 [rule #1]
+*   *   w : t1, c : forall a. t1 -> a -> t1, y : t' |- y : t' [rule #1]
+```
+
+## Output
+
+`Correct` / `Incorrect` or parse error
