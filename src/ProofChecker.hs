@@ -95,9 +95,3 @@ checkProof (ch@[_ `Proof` hs :|- e :. sigma :# _] `Proof` hs' :|- e' :. ForAll a
 -- rule 6
 
 checkProof _ = False
-
--- a : forall x. x, b : y |- let huy = a in b : y [rule #4]
-
--- *   a : forall x. x, b : y |- a : forall x. x [rule #1]
-
--- *   a : forall x. x, b : y, huy : forall x. x |- b : y [rule #1]
