@@ -3,10 +3,15 @@
 module Base where
 
 infix 2 `Proof`
+
 infix 3 :#
+
 infix 4 :|-
+
 infix 5 :.
+
 infixr 6 :=>
+
 infix 7 `Appl`
 
 type Var = String
